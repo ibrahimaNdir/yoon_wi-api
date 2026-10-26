@@ -10,10 +10,10 @@ use App\Models\Fare;
 use App\Models\Route;
 use App\Models\RouteStop;
 use App\Models\Stop;
+use App\Services\MapboxService;
 use Clickbar\Magellan\Data\Geometries\Point;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 class ImportReseau extends Command
@@ -38,11 +38,16 @@ class ImportReseau extends Command
 
     private array $stopCache = [];
 
-    private int $geocodeCount = 0;
+    private MapboxService $mapboxService;
 
-    private array $geocodeCache = [];
-
-    private string $cachePath;
+    /**
+     * Créer une nouvelle instance de la commande.
+     */
+    public function __construct(MapboxService $mapboxService)
+    {
+        parent::__construct();
+        $this->mapboxService = $mapboxService;
+    }
 
     /**
      * Execute the console command.
@@ -58,12 +63,9 @@ class ImportReseau extends Command
             return self::FAILURE;
         }
 
-        $this->cachePath = storage_path('app/data/geocode_cache.json');
-        $this->loadGeocodeCache();
-
         $json = json_decode(file_get_contents($filePath), true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->error('JSON invalide : ' . json_last_error_msg());
+            $this->error('JSON invalide : '.json_last_error_msg());
 
             return self::FAILURE;
         }
@@ -101,8 +103,8 @@ class ImportReseau extends Command
         ];
 
         $this->info("Import du réseau : {$network}");
-        $this->info('Lignes à traiter : ' . count($lines));
-        $this->info('Géocodage : ' . ($skipGeocode ? 'désactivé' : "activé (limite : {$limit})"));
+        $this->info('Lignes à traiter : '.count($lines));
+        $this->info('Géocodage : '.($skipGeocode ? 'désactivé' : "activé (limite : {$limit})"));
         $this->line('');
 
         foreach ($lines as $lineData) {
@@ -118,7 +120,7 @@ class ImportReseau extends Command
         }
 
         if (! $dryRun) {
-            file_put_contents($this->cachePath, json_encode($this->geocodeCache, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            $this->mapboxService->saveCache();
         }
 
         $this->line('');
@@ -144,7 +146,7 @@ class ImportReseau extends Command
         $reseau = Arr::get($lineData, 'reseau', 'Inconnu');
         $numero = Arr::get($lineData, 'numero');
         if (empty($numero)) {
-            $numero = 'Sans numéro'; // Ou 'N/A' ou $nomLigne si tu préfères
+            $numero = 'Sans numéro';
         }
         $nomLigne = Arr::get($lineData, 'libelle_officiel', $numero);
         $tarif = Arr::get($lineData, 'tarif_standard_fcfa');
@@ -228,7 +230,7 @@ class ImportReseau extends Command
 
                 if (! $dryRun && $agency !== null) {
                     $stop = Stop::where('name', $stopName)
-                        ->whereHas('routes', fn($q) => $q->where('agency_id', $agency->id))
+                        ->whereHas('routes', fn ($q) => $q->where('agency_id', $agency->id))
                         ->first();
                 }
 
@@ -289,7 +291,7 @@ class ImportReseau extends Command
     }
 
     /**
-     * Créer un Stop avec géocodage Mapbox.
+     * Créer un Stop avec géocodage via MapboxService.
      */
     private function createStop(string $name, bool $dryRun, int $limit, bool $skipGeocode, array &$stats, string $reseau): ?Stop
     {
@@ -298,11 +300,8 @@ class ImportReseau extends Command
             return new Stop(['name' => $name]);
         }
 
-        // --- 1. DICTIONNAIRES EN DUR (Priorité absolue) ---
-        $currentNetwork = strtolower($reseau ?: $this->argument('network') ?? '');
-        $cleanStopName = trim($name);
-
-        // Dictionnaire TER
+        // --- Dictionnaire en dur pour le réseau TER (priorité absolue, pas d'appel Mapbox) ---
+        $currentNetwork = strtolower($reseau);
         $hardcodedTerCoords = [
             'Dakar' => [14.676460, -17.433661],
             'Colobane' => [14.700332, -17.441652],
@@ -321,66 +320,15 @@ class ImportReseau extends Command
             'AIBD' => [14.672110, -17.064510],
         ];
 
-        // Dictionnaire BRT
-        $hardcodedBrtCoords = [
-            'Préfecture de Guédiawaye' => [14.7719791, -17.3868591],
-            'Golf Nord' => [14.7763179, -17.3984054],
-            'Dalal Jam' => [14.7719783, -17.4082010],
-            'Golf Sud' => [14.7675735, -17.4134425],
-            'Ndingala' => [14.7646271, -17.4196781],
-            'Parcelles' => [14.7626996, -17.4242946],
-            'Croisement 22' => [14.7539779, -17.4332535],
-            'Police Parcelles Assainies' => [14.7510760, -17.4387907],
-            'Grand Médine' => [14.7481903, -17.4444326],
-            'Cardinal Hyacinthe Thiandoum' => [14.7415853, -17.4513360],
-            'Scat Urbam' => [14.7369859, -17.4552396],
-            'Liberté 6' => [14.7263088, -17.4591976],
-            'Liberté 5' => [14.7210415, -17.4640450],
-            'Liberté 1' => [14.7099321, -17.4624955],
-            'Grand Dakar' => [14.7049934, -17.4583342],
-            'Dial Diop' => [14.6993790, -17.4535498],
-            'Grande Mosquée' => [14.6824846, -17.4443248],
-            'Sacré-Cœur' => [14.7169687, -17.4665407],
-            'Place de la Nation' => [14.6960909, -17.4506369],
-            'Papa Gueye Fall (Petersen)' => [14.6766438, -17.4406354],
-            'Gueule Tapée' => [14.7756271, -17.3921489],
-            'Khar Yalla' => [14.7320392, -17.4564326],
-            'Fith Mith' => [14.7753280, -17.4055188],
-        ];
+        if ($currentNetwork === 'ter' && isset($hardcodedTerCoords[$name])) {
+            $coords = $hardcodedTerCoords[$name];
 
-        // Application du dictionnaire TER
-        if ($currentNetwork === 'ter' && isset($hardcodedTerCoords[$cleanStopName])) {
-            $coords = $hardcodedTerCoords[$cleanStopName];
             return Stop::create([
                 'name' => $name,
-                'geom' => Point::makeGeodetic($coords[0], $coords[1]),
+                'geom' => Point::makeGeodetic((float) $coords[0], (float) $coords[1]),
                 'is_station' => false,
                 'verified_at' => null,
             ]);
-        }
-
-        // Application du dictionnaire BRT (le réseau s'appelle 'sunubrt' dans le JSON)
-        if (str_contains($currentNetwork, 'brt') && isset($hardcodedBrtCoords[$cleanStopName])) {
-            $coords = $hardcodedBrtCoords[$cleanStopName];
-            return Stop::create([
-                'name' => $name,
-                'geom' => Point::makeGeodetic($coords[0], $coords[1]),
-                'is_station' => true, // C'est une station BRT
-                'verified_at' => null,
-            ]);
-        }
-
-        // --- 2bis. Recherche dans la base par nom (insensible à la casse) avant Mapbox ---
-        // Réutilise un arrêt existant (même créé par un autre réseau : DDD, TER, etc.)
-        // pour éviter les doublons et économiser l'API Mapbox.
-        if (! $dryRun) {
-            $existingStop = Stop::whereRaw('lower(name) = ?', [strtolower($name)])->first();
-            if ($existingStop !== null) {
-                $stats['stops_reused']++;
-                $this->line("  [REUSE DB] {$name} (id={$existingStop->id})");
-
-                return $existingStop;
-            }
         }
 
         // --- Mode sans géocodage : point neutre (Dakar) ---
@@ -393,44 +341,25 @@ class ImportReseau extends Command
             ]);
         }
 
-        // --- 2. Vérifier le cache de géocodage local (sécurisé par réseau) ---
-        $cacheKey = $currentNetwork . '_' . $cleanStopName; // AJOUT DE LA SÉCURITÉ ICI
-
-        if (isset($this->geocodeCache[$cacheKey])) {
-            $coords = $this->geocodeCache[$cacheKey];
-            $lat = $coords['lat'] ?? $coords[1] ?? null;
-            $lng = $coords['lng'] ?? $coords[0] ?? null;
-
-            if ($lat !== null && $lng !== null) {
-                $stats['geocoded']++;
-                return Stop::create([
-                    'name' => $name,
-                    'geom' => Point::makeGeodetic((float) $lat, (float) $lng),
-                    'is_station' => false,
-                    'verified_at' => null,
-                ]);
-            }
-        }
-
-        // --- 3. Vérifier la limite de géocodage ---
-        if ($this->geocodeCount >= $limit) {
+        // --- Vérifier la limite de géocodage avant d'appeler Mapbox ---
+        if ($stats['geocoded'] >= $limit) {
             return null;
         }
 
-        // --- 4. Appel API Mapbox ---
-        $geocoded = $this->callMapbox($name);
+        // --- Géocodage via MapboxService ---
+        $geocoded = $this->mapboxService->geocode($name);
+
+        // Vérifier la limite de géocodage (le service retourne null si limite atteinte ou échec)
         if ($geocoded === null) {
+            // On ne sait pas si c'est un échec ou la limite, on compte comme échec pour la stat
             $stats['geocode_failed']++;
+
             return null;
         }
 
         $lat = $geocoded['lat'];
         $lng = $geocoded['lng'];
-        $this->geocodeCache[$cacheKey] = ['lat' => $lat, 'lng' => $lng];
-        $this->geocodeCount++;
         $stats['geocoded']++;
-
-        usleep(200000);
 
         return Stop::create([
             'name' => $name,
@@ -439,78 +368,7 @@ class ImportReseau extends Command
             'verified_at' => null,
         ]);
     }
-    /**
-     * Appeler l API Mapbox Geocoding pour un nom d arrêt.
-     *
-     * @return array{lat: float, lng: float}|null
-     */
-    /**
-     * Appeler l API Mapbox Geocoding pour un nom d arrêt.
-     *
-     * @return array{lat: float, lng: float}|null
-     */
-    private function callMapbox(string $stopName): ?array
-    {
-        $token = config('services.mapbox.token', env('MAPBOX_TOKEN'));
-        if (empty($token)) {
-            $this->warn('MAPBOX_TOKEN non configuré dans .env');
 
-            return null;
-        }
-
-        // 1. Dictionnaire de traduction pour les cas particuliers
-        $translations = [
-            'PNR' => 'Passage à Niveau de Rufisque',
-            'AIBD' => 'Aéroport International Blaise Diagne',
-            'Baux Maraîchers' => 'Gare des Baux Maraîchers',
-        ];
-
-        $searchName = $translations[$stopName] ?? $stopName;
-
-        // 2. On ajoute "Dakar, Sénégal" pour contextualiser les noms de rues génériques (ex: Rue 10)
-        if (! str_contains(strtolower($searchName), 'dakar') && ! str_contains(strtolower($searchName), 'aéroport')) {
-            $searchName .= ', Dakar, Sénégal';
-        }
-
-        $encoded = rawurlencode($searchName);
-        $url = "https://api.mapbox.com/geocoding/v5/mapbox.places/{$encoded}.json?access_token={$token}&limit=1&country=SN&language=fr";
-
-        try {
-            $response = Http::timeout(10)->get($url);
-
-            if (! $response->successful()) {
-                $this->warn("Mapbox échec (HTTP {$response->status()}) pour : {$stopName}");
-
-                return null;
-            }
-
-            $data = $response->json();
-            $features = Arr::get($data, 'features', []);
-
-            if (empty($features)) {
-                $this->warn("Mapbox : aucun résultat pour : {$stopName}");
-
-                return null;
-            }
-
-            $center = Arr::get($features[0], 'center', []);
-            if (count($center) < 2) {
-                $this->warn("Mapbox : coordonnées incomplètes pour : {$stopName}");
-
-                return null;
-            }
-
-            // Mapbox retourne [longitude, latitude]
-            $lng = (float) $center[0];
-            $lat = (float) $center[1];
-
-            return ['lat' => $lat, 'lng' => $lng];
-        } catch (\Throwable $e) {
-            $this->warn("Mapbox exception pour {$stopName} : " . $e->getMessage());
-
-            return null;
-        }
-    }
     /**
      * Créer ou récupérer la DataSource liée au fichier JSON.
      */
@@ -520,7 +378,7 @@ class ImportReseau extends Command
             ['url' => $source],
             [
                 'kind' => 'json_import',
-                'description' => 'Import depuis fichier JSON : ' . Str::limit($source, 100),
+                'description' => 'Import depuis fichier JSON : '.Str::limit($source, 100),
                 'collected_at' => $dateExtraction,
             ]
         );
@@ -538,23 +396,6 @@ class ImportReseau extends Command
         }
 
         return '';
-    }
-
-    /**
-     * Charger le cache de géocodage depuis le disque.
-     */
-    private function loadGeocodeCache(): void
-    {
-        if (! file_exists($this->cachePath)) {
-            file_put_contents($this->cachePath, '{}');
-        }
-
-        $content = file_get_contents($this->cachePath);
-        $decoded = json_decode($content, true);
-
-        if (is_array($decoded)) {
-            $this->geocodeCache = $decoded;
-        }
     }
 
     /**

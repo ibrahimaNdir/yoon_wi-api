@@ -37,4 +37,20 @@ class Stop extends Model
     {
         return $this->hasMany(WalkLink::class, 'to_stop_id');
     }
+
+    /**
+     * Récupérer la latitude de l'arrêt.
+     */
+    public function getLatitudeAttribute(): ?float
+    {
+        return $this->geom?->getY();
+    }
+
+    /**
+     * Récupérer la longitude de l'arrêt.
+     */
+    public function getLongitudeAttribute(): ?float
+    {
+        return $this->geom?->getX();
+    }
 }
