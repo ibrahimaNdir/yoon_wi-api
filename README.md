@@ -1,58 +1,60 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 🚌 Yoon Wi (YoonWi) – Le chemin, simplement 🇸🇳
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+> **Yoon Wi** (« Le chemin » en wolof) est une application mobile de calcul d'itinéraire et de guidage multimodal dédiée à la région de Dakar (Sénégal). Elle unifie et combine en une seule feuille de route les 4 grands réseaux de transport formels : le **TER**, le **BRT**, les **Bus Tata (AFTU)** et les bus **Dakar Dem Dikk (DDD)**.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 📌 Sommaire
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- [À propos du projet](#-à-propos-du-projet)
+- [Fonctionnalités clés](#-fonctionnalités-clés)
+- [Les 4 Réseaux Intégrés](#-les-4-réseaux-intégrés)
+- [Architecture Technique](#-architecture-technique)
+- [Structure du Projet](#-structure-du-projet)
+- [Modèle de Données (Base de données)](#-modèle-de-données-base-de-données)
+- [Installation & Configuration](#-installation--configuration)
+- [Contribution](#-contribution)
+- [Licence & Contact](#-licence--contact)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+---
 
-## Learning Laravel
+## 🎯 À propos du projet
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+À Dakar, l'offre de transport en commun est vaste mais fragmentée entre plusieurs opérateurs publics et privés. Pour un usager, planifier un trajet combinant plusieurs modes de transport relève souvent du défi. 
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+**Yoon Wi** résout ce problème en offrant une solution simple :
+1. L'utilisateur indique son départ et son arrivée (via la géolocalisation, une carte interactive ou des repères populaires comme *UCAD, Petersen, Colobane, Liberté 6*).
+2. L'application calcule et compare les meilleures options en affichant le **prix total exact en FCFA**, la **durée estimée** et les **correspondances**.
+3. L'usager suit une feuille de route détaillée, étape par étape, même en **mode hors-ligne**.
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+---
 
-## Agentic Development
+## 🌟 Fonctionnalités clés
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+- 🔀 **Moteur de Routage Multimodal :** Combinaison fluide de la marche à pied, des bus de quartier (AFTU), des lignes urbaines (DDD), du bus rapide en site propre (BRT) et du train express (TER).
+- 💰 **Estimation Transparente des Coûts & Temps :** Calcul précis du tarif global en FCFA selon les grilles zonales ou forfaitaires de chaque réseau.
+- ⚡ **Double Optimisation (Éco vs Express) :**
+  - **Option Éco :** Privilégie les trajets les moins chers (AFTU / DDD).
+  - **Option Express :** Privilégie la rapidité et évite les embouteillages (BRT / TER).
+- 📍 **Gestion des Hubs de Correspondance :** Explication claire des points de rupture majeurs (*Colobane, Petersen, Grand Médine, UCAD, Diamniadio*) et temps de marche entre les quais.
+- 📶 **Mode Hors-Ligne (Offline-First) :** Base de données embarquée sur le téléphone permettant de calculer des itinéraires et consulter les lignes sans connexion Internet.
+- 🚨 **Gestion des Perturbations :** Alertes en temps réel en cas de retards ou d'incidents sur une ligne avec recalcul automatique d'itinéraire alternatif.
+- 🗣️ **Support Multilingue :** Disponible en Français et Anglais (intégration future de la recherche vocale en Wolof).
+- 📣 **Signalements Communautaires :** Module permettant aux utilisateurs de signaler une erreur de tarif, un arrêt déplacé ou une ligne manquante.
 
-```bash
-composer require laravel/boost --dev
+---
 
-php artisan boost:install
-```
+## 🚌 Les 4 Réseaux Intégrés
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+| Réseau | Type | Description / Zone | Tarification |
+| :--- | :--- | :--- | :--- |
+| **TER** | Train Express Régional | Liaison rapide Dakar ↔ Diamniadio ↔ AIBD | Zonale (Z1, Z2, Z3) — dès 1 500 FCFA |
+| **SunuBRT** | Bus Rapid Transit | Voies dédiées à haut niveau de service (Lignes B1, B2, B3) | Zonale — 400 / 500 FCFA |
+| **Bus Tata** | AFTU (Minibus) | Réseau de proximité maillant tous les quartiers | Forfaitaire / Sectionnelle — dès 150 FCFA |
+| **Dakar Dem Dikk** | Bus Urbains (DDD) | Lignes structurantes sur les grands axes et boulevards | Sectionnelle — dès 150 FCFA |
 
-## Contributing
+---
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## 🏗️ Architecture Technique
 
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Le projet repose sur une séparation claire entre le serveur central (API & Données maître) et l'application client mobile.git
