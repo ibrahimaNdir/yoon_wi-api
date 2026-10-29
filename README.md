@@ -9,12 +9,7 @@
 - [À propos du projet](#-à-propos-du-projet)
 - [Fonctionnalités clés](#-fonctionnalités-clés)
 - [Les 4 Réseaux Intégrés](#-les-4-réseaux-intégrés)
-- [Architecture Technique](#-architecture-technique)
-- [Structure du Projet](#-structure-du-projet)
-- [Modèle de Données (Base de données)](#-modèle-de-données-base-de-données)
-- [Installation & Configuration](#-installation--configuration)
-- [Contribution](#-contribution)
-- [Licence & Contact](#-licence--contact)
+
 
 ---
 
@@ -55,6 +50,3 @@
 
 ---
 
-## 🏗️ Architecture Technique
-
-Le projet repose sur une séparation claire entre le serveur central (API & Données maître) et l'application client mobile.git
